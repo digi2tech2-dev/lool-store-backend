@@ -30,7 +30,7 @@ const _findOrFail = async (id) => {
     return user;
 };
 
-const USER_LIST_SORT_FIELDS = new Set(['createdAt', 'walletBalance', 'name', 'email', 'status', 'role']);
+const USER_LIST_SORT_FIELDS = new Set(['createdAt', 'userNumber', 'walletBalance', 'name', 'email', 'status', 'role']);
 
 // ─── List ──────────────────────────────────────────────────────────────────────
 
@@ -88,6 +88,9 @@ const listUsers = async ({
                 { email: { $regex: term, $options: 'i' } },
                 { username: { $regex: term, $options: 'i' } },
             ];
+            if (/^\d+$/.test(term) && Number.isSafeInteger(Number(term))) {
+                filter.$or.push({ userNumber: Number(term) });
+            }
         }
     }
     if (from || to) {

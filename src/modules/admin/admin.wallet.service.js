@@ -37,7 +37,7 @@ const listWallets = async ({ page = 1, limit = 20 } = {}) => {
 
     const [users, total] = await Promise.all([
         User.find({ deletedAt: null })
-            .select('name email walletBalance creditLimit creditUsed currency role status')
+            .select('userNumber name email walletBalance creditLimit creditUsed currency role status')
             .sort({ walletBalance: -1 })
             .skip(skip)
             .limit(limit),
@@ -57,7 +57,7 @@ const listWallets = async ({ page = 1, limit = 20 } = {}) => {
 
 const getWallet = async (userId) => {
     const user = await User.findById(userId)
-        .select('name email walletBalance creditLimit creditUsed currency status');
+        .select('userNumber name email walletBalance creditLimit creditUsed currency status');
     if (!user) throw new NotFoundError('User');
 
     // Fetch recent transactions WITH populated references so the frontend
