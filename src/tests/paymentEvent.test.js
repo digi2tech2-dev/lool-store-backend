@@ -194,8 +194,14 @@ describe('payment event persistence and matching', () => {
     });
 
     test('marks multiple exact candidate deposits as AMBIGUOUS', async () => {
-        await createPendingVodafoneDeposit();
-        await createPendingVodafoneDeposit();
+        const { deposit } = await createPendingVodafoneDeposit();
+        // New requests reject duplicate transaction IDs. Legacy records may
+        // still contain duplicates, so exercise the matcher with such a record.
+        await expect(createPendingVodafoneDeposit()).rejects.toMatchObject({ code: 'TRANSACTION_ID_ALREADY_USED' });
+        const legacy = deposit.toObject();
+        delete legacy._id;
+        delete legacy.__v;
+        await DepositRequest.collection.insertOne(legacy);
         await postEvent(walletSms());
         expect((await PaymentEvent.findOne()).matchStatus).toBe('AMBIGUOUS');
     });

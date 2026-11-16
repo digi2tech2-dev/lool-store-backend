@@ -48,9 +48,10 @@ const getCanonicalProviderProductPrice = (providerProduct) => normalizeProviderD
  * Public-facing product list. Returns only active products for customers;
  * admins pass activeOnly=false to see everything.
  */
-const listProducts = async ({ activeOnly = true, page = 1, limit = 50 } = {}) => {
+const listProducts = async ({ activeOnly = true, page = 1, limit = 50, excludeProductIds = [] } = {}) => {
     const filter = { deletedAt: null };
     if (activeOnly) filter.isActive = true;
+    if (excludeProductIds.length) filter._id = { $nin: excludeProductIds };
     const skip = (page - 1) * limit;
 
     const [products, total] = await Promise.all([

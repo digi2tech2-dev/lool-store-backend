@@ -213,11 +213,11 @@ const notifyAccountApproved = (userId) => {
  * Notify user that their deposit has been approved.
  * @param {Object} deposit - DepositRequest document
  */
-const notifyDepositApproved = (deposit) => {
+const notifyDepositApproved = (deposit, details = {}) => {
     return notifyUser({
         userId: deposit.userId?._id ?? deposit.userId,
-        title: 'Deposit Approved ✅',
-        message: `Your deposit of ${deposit.requestedAmount} ${deposit.currency || 'USD'} has been approved and credited to your wallet.`,
+        title: '\u062a\u0645 \u0642\u0628\u0648\u0644 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0631\u0635\u064a\u062f \u2705',
+        message: `\u062a\u0645 \u0642\u0628\u0648\u0644 \u0637\u0644\u0628 \u0634\u062d\u0646\u0643 \u0628\u0642\u064a\u0645\u0629 ${deposit.requestedAmount} ${deposit.currency || ''} \u0648\u0625\u0636\u0627\u0641\u0629 ${details.creditedAmount ?? deposit.requestedAmount} ${details.walletCurrency || deposit.currency || ''} \u0625\u0644\u0649 \u0645\u062d\u0641\u0638\u062a\u0643.${details.balanceAfter != null ? ` \u0631\u0635\u064a\u062f\u0643 \u0628\u0639\u062f \u0627\u0644\u0625\u0636\u0627\u0641\u0629: ${details.balanceAfter} ${details.walletCurrency || ''}.` : ''}`,
         type: NOTIFICATION_TYPE.SUCCESS,
         source: 'DEPOSIT',
     });
@@ -246,11 +246,11 @@ const notifyNewDeposit = (deposit) => {
  * @param {string|null} [adminNotes]
  */
 const notifyDepositRejected = (deposit, adminNotes = null) => {
-    const reason = adminNotes ? ` Reason: ${adminNotes}` : '';
+    const reason = adminNotes ? ` \u0627\u0644\u0633\u0628\u0628: ${adminNotes}` : '';
     return notifyUser({
         userId: deposit.userId?._id ?? deposit.userId,
-        title: 'Deposit Rejected ❌',
-        message: `Your deposit of ${deposit.requestedAmount} ${deposit.currency || 'USD'} has been rejected.${reason}`,
+        title: '\u062a\u0645 \u0631\u0641\u0636 \u0637\u0644\u0628 \u0627\u0644\u0634\u062d\u0646 \u274c',
+        message: `\u0646\u0639\u062a\u0630\u0631\u060c \u062a\u0645 \u0631\u0641\u0636 \u0637\u0644\u0628 \u0634\u062d\u0646\u0643 \u0628\u0642\u064a\u0645\u0629 ${deposit.requestedAmount} ${deposit.currency || ''}.${reason}`,
         type: NOTIFICATION_TYPE.ERROR,
         source: 'DEPOSIT',
     });

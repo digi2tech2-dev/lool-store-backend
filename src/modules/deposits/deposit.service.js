@@ -253,6 +253,7 @@ const approveDeposit = async (depositId, adminId, adminOverrides = {}, auditCont
     let finalCurrency;
     let walletCurrency;
     let walletCreditAmount;
+    let creditTransaction = null;
     let conversionNote;
     let commissionOutcome = null;
 
@@ -352,7 +353,7 @@ const approveDeposit = async (depositId, adminId, adminOverrides = {}, auditCont
     await runTestHook(testHooks.beforeWalletUpdate, { deposit: updated });
 
     // Credit the wallet
-    await creditWalletDirect({
+    const walletCreditResult = await creditWalletDirect({
         userId: updated.userId,
         amount: walletCreditAmount,
         reference: updated._id,
@@ -360,6 +361,7 @@ const approveDeposit = async (depositId, adminId, adminOverrides = {}, auditCont
         session,
         testHooks: testHooks.wallet,
     });
+    creditTransaction = walletCreditResult?.transaction || null;
 
     await runTestHook(testHooks.afterWalletCreditBeforeCommission, { deposit: updated });
 
@@ -427,7 +429,11 @@ const approveDeposit = async (depositId, adminId, adminOverrides = {}, auditCont
 
     const notificationFn = testHooks.notifyDepositApproved || notifyDepositApproved;
     try {
-        Promise.resolve(notificationFn(populated)).catch((err) => {
+        Promise.resolve(notificationFn(populated, {
+            creditedAmount: walletCreditAmount,
+            walletCurrency,
+            balanceAfter: creditTransaction?.balanceAfter,
+        })).catch((err) => {
             console.error('Deposit approval notification failed:', err.message);
         });
     } catch (err) {

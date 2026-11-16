@@ -59,6 +59,8 @@ const DEFAULT_SETTINGS = [
     { key: 'paymentCountryAccounts', value: [], description: 'Country-specific payment accounts' },
     { key: 'paymentInstructions', value: '', description: 'General payment instructions shown to customers' },
     { key: 'whatsappNumber', value: '', description: 'WhatsApp number for customer support' },
+    { key: 'supportContacts', value: { owner: '', support: '', entries: [], revision: 0 }, description: 'Public WhatsApp support contacts' },
+    { key: 'adminNotificationWhatsApp', value: '', description: 'WhatsApp recipient for administrator notifications' },
     { key: 'referralDefaultCommissionPercent', value: '1', description: 'Default referral commission percent' },
     {
         key: 'referralPayoutMethods',

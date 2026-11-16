@@ -34,6 +34,8 @@ const PRODUCT_SELECT = [
     'minQty',
     'maxQty',
     'basePrice',
+    'provider',
+    'providerPrice',
     'orderFields',
     'dynamicFields',
     'displayOrder',
@@ -150,7 +152,8 @@ const buildCategoryMaps = (categories) => {
 
 const priceProduct = async (product, reseller) => {
     const percentage = Number(reseller.groupId?.percentage || 0);
-    const priceUsd = calculateFinalPrice(product.basePrice, percentage);
+    const override = await require('../users/userProductVisibility.service').getOverride(reseller._id, product._id);
+    const priceUsd = require('../users/userProductPriceFloor').resolveCustomPrice(product, override?.priceOverride, percentage).price ?? calculateFinalPrice(product.basePrice, percentage);
 
     return {
         priceUsd,
@@ -167,6 +170,7 @@ const listProducts = async (reseller, { productsId = '', base = false } = {}) =>
     }
 
     const filter = { isActive: true, deletedAt: null };
+    filter._id = { $nin: await require('../users/userProductVisibility.service').hiddenProductIds(reseller._id) };
     const productIds = parseProductIds(productsId);
     if (productIds.length > 0) {
         filter.compatProductId = { $in: productIds };
@@ -214,8 +218,9 @@ const getContent = async (reseller, parentId) => {
         throw new ClientCompatError('Validation error', ERROR_CODES.VALIDATION, 400);
     }
 
+    const hiddenIds = await require('../users/userProductVisibility.service').hiddenProductIds(reseller._id);
     const [allProducts, categories] = await Promise.all([
-        Product.find({ isActive: true, deletedAt: null })
+        Product.find({ isActive: true, deletedAt: null, _id: { $nin: hiddenIds } })
             .select(PRODUCT_SELECT)
             .sort({ displayOrder: 1, name: 1 })
             .lean(),

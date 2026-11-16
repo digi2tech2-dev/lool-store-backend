@@ -560,6 +560,8 @@ const _attemptCreateOrder = async (
         // ── 1. Load & Validate Product ─────────────────────────────────────────
         const product = await Product.findById(productId).session(session);
         if (!product) throw new NotFoundError('Product');
+        const { isHidden } = require('../users/userProductVisibility.service');
+        if (await isHidden(userId, product._id, session)) throw new NotFoundError('Product');
         if (!product.isActive) {
             throw new BusinessRuleError('This product is currently unavailable.', 'PRODUCT_INACTIVE');
         }
@@ -625,6 +627,7 @@ const _attemptCreateOrder = async (
         // proceeds with the cached DB price.  A transient outage should NOT
         // block legitimate orders.
         //
+        const priceOverride = await require('../users/userProductVisibility.service').getOverride(userId, product._id, session);
         if (product.provider && product.providerProduct && provider) {
             try {
                 // Look up the externalProductId from the linked ProviderProduct
@@ -646,12 +649,17 @@ const _attemptCreateOrder = async (
                             _autoUpdateProductPrice(product._id, livePrice, product.markupType, product.markupValue);
                             invalidatePriceCache(String(product.provider));
 
-                            throw new BusinessRuleError(
-                                'The provider has increased the price for this service. ' +
-                                'The catalog has been automatically updated. ' +
-                                'Please refresh and review the new price before ordering.',
-                                'PROVIDER_PRICE_INCREASED'
-                            );
+                            const crossesCustomPrice = priceOverride?.priceOverride != null
+                                && compare(String(livePrice), String(priceOverride.priceOverride)) > 0;
+                            if (!crossesCustomPrice) {
+                                throw new BusinessRuleError(
+                                    'The provider has increased the price for this service. ' +
+                                    'The catalog has been automatically updated. ' +
+                                    'Please refresh and review the new price before ordering.',
+                                    'PROVIDER_PRICE_INCREASED'
+                                );
+                            }
+                            product.providerPrice = String(livePrice);
                         }
                     }
                 }
@@ -834,7 +842,7 @@ const _attemptCreateOrder = async (
         // ── END Quantity-Only Branch ─────────────────────────────────────────
 
         // ── 3. Pricing Engine (USD) ────────────────────────────────────────────
-        const pricing = await calculateUserPrice(userId, product.basePrice, session);
+        const pricing = await calculateUserPrice(userId, product.basePrice, session, product._id, product);
         const usdTotalPrice = multiply(pricing.finalPrice, String(qty));
 
         // ── 3a. Profit Calculation (USD) ────────────────────────────────────────

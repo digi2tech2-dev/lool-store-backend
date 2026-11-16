@@ -87,7 +87,7 @@ const calculateFinalPrice = (basePrice, percentage) => {
  *   groupId:          ObjectId
  * }>}
  */
-const calculateUserPrice = async (userId, basePrice, session = null) => {
+const calculateUserPrice = async (userId, basePrice, session = null, productId = null, product = null) => {
     // Load user with groupId populated so we get percentage in one round-trip
     const query = User.findById(userId).populate('groupId', 'name percentage isActive');
     if (session) query.session(session);
@@ -119,11 +119,14 @@ const calculateUserPrice = async (userId, basePrice, session = null) => {
     // basePrice is a string — ensure it's valid
     const safeBasePrice = isPositive(basePrice) ? String(basePrice) : '0';
 
-    const finalPrice = calculateFinalPrice(safeBasePrice, markupPercentage);
+    const override = productId ? await require('../users/userProductVisibility.service').getOverride(userId, productId, session) : null;
+    const resolved = require('../users/userProductPriceFloor').resolveCustomPrice(product, override?.priceOverride, markupPercentage);
+    if (resolved.error) throw new BusinessRuleError('Supplier price is unavailable or invalid.', resolved.error);
+    const finalPrice = resolved.price ?? calculateFinalPrice(safeBasePrice, markupPercentage);
 
     return {
         basePrice: safeBasePrice,
-        markupPercentage,
+        markupPercentage: override?.priceOverride != null && !resolved.usingSupplierPrice ? 0 : markupPercentage,
         finalPrice,
         groupId: group._id,
     };

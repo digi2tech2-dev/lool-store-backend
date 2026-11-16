@@ -179,6 +179,60 @@ router.get('/stats', statsCtrl.getDashboardStats);
 
 router.get('/users', requirePermission('VIEW_USERS'), validateQuery(schemas.listUsersQuery), usersCtrl.listUsers);
 router.get('/users/deleted', requirePermission('VIEW_USERS'), usersCtrl.listDeletedUsers); // MUST be before /:id
+router.get('/users/:id/product-visibility', requirePermission('VIEW_USERS'), resolveUserNumber('id'), catchAsync(async (req, res) => {
+    const { Product } = require('../products/product.model');
+    const { User } = require('../users/user.model');
+    const { getOverrides } = require('../users/userProductVisibility.service');
+    const { calculateFinalPrice } = require('../orders/pricing.service');
+    const user = await User.findById(req.params.id).select('_id groupId').populate('groupId', 'percentage isActive billingMode').lean();
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    const [products, overrides] = await Promise.all([
+        Product.find({ deletedAt: null }).select('name image isActive basePrice providerPrice provider').sort({ name: 1 }).lean(),
+        getOverrides(user._id),
+    ]);
+    const percentage = user.groupId?.isActive ? Number(user.groupId.percentage || 0) : null;
+    const canSeeSupplierPrice = req.user.role === 'ADMIN' || req.user.permissions?.includes('MANAGE_PRODUCTS');
+    return res.json({ success: true, data: products.map((product) => ({ id: String(product._id), name: product.name, image: product.image, isActive: product.isActive, hidden: Boolean(overrides.get(String(product._id))?.isHidden), priceOverride: overrides.get(String(product._id))?.priceOverride ?? null,
+        supplierPrice: canSeeSupplierPrice && product.provider ? product.providerPrice ?? null : null,
+        basePrice: product.basePrice ?? null, groupPercentage: percentage,
+        groupPrice: percentage !== null && product.basePrice != null ? calculateFinalPrice(product.basePrice, percentage) : null,
+        effectiveCustomPrice: percentage !== null ? require('../users/userProductPriceFloor').resolveCustomPrice(product, overrides.get(String(product._id))?.priceOverride, percentage).price : null,
+        followsSupplier: percentage !== null && require('../users/userProductPriceFloor').resolveCustomPrice(product, overrides.get(String(product._id))?.priceOverride, percentage).usingSupplierPrice,
+        billingMode: user.groupId?.billingMode || 'standard' })) });
+}));
+router.patch('/users/:id/product-price/:productId', requirePermission('MANAGE_USERS'), requirePermission('MANAGE_PRODUCTS'), resolveUserNumber('id'), catchAsync(async (req, res) => {
+    const mongoose = require('mongoose');
+    const Decimal = require('decimal.js');
+    const { User } = require('../users/user.model');
+    const { Product } = require('../products/product.model');
+    const Visibility = require('../users/userProductVisibility.model');
+    const raw = req.body?.priceOverride;
+    if (!mongoose.isValidObjectId(req.params.productId) || (raw !== null && (typeof raw !== 'string' || !/^(?:0|[1-9]\d{0,17})(?:\.\d{1,50})?$/.test(raw) || !new Decimal(raw).gt(0)))) return res.status(400).json({ success: false, message: 'Enter a positive USD price or clear it.' });
+    const [user, product] = await Promise.all([User.findById(req.params.id).select('_id role groupId').populate('groupId', 'billingMode').lean(), Product.findOne({ _id: req.params.productId, deletedAt: null }).select('_id provider providerPrice').lean()]);
+    if (!user || !product) return res.status(404).json({ success: false, message: 'User or product not found.' });
+    if (user.role !== 'CUSTOMER' || user.groupId?.billingMode === 'quantity_only') return res.status(400).json({ success: false, message: 'Custom pricing requires a standard customer account.' });
+    const floorError = require('../users/userProductPriceFloor').getPriceFloorError(product, raw);
+    if (floorError === 'SUPPLIER_PRICE_UNAVAILABLE') return res.status(422).json({ success: false, code: floorError, message: 'Supplier price is unavailable. Update the supplier price before setting a custom price.' });
+    if (floorError) return res.status(422).json({ success: false, code: floorError, message: 'Custom price cannot be below the latest supplier price.' });
+    const row = await Visibility.findOneAndUpdate({ userId: user._id, productId: product._id }, { $set: { priceOverride: raw, updatedBy: req.user._id } }, { upsert: true, new: true, runValidators: true });
+    const { createAuditLog } = require('../audit/audit.service');
+    const { ADMIN_ACTIONS, ENTITY_TYPES, ACTOR_ROLES } = require('../audit/audit.constants');
+    await createAuditLog({ actorId: req.user._id, actorRole: ACTOR_ROLES.ADMIN, action: ADMIN_ACTIONS.USER_UPDATED,
+        entityType: ENTITY_TYPES.USER, entityId: user._id, metadata: { operation: 'user_product_price', productId: String(product._id), priceOverride: raw } });
+    return res.json({ success: true, data: { priceOverride: row.priceOverride } });
+}));
+router.patch('/users/:id/product-visibility/:productId', requirePermission('MANAGE_USERS'), resolveUserNumber('id'), catchAsync(async (req, res) => {
+    const mongoose = require('mongoose');
+    const { User } = require('../users/user.model');
+    const { Product } = require('../products/product.model');
+    const Visibility = require('../users/userProductVisibility.model');
+    if (!mongoose.isValidObjectId(req.params.productId) || typeof req.body?.hidden !== 'boolean') return res.status(400).json({ success: false, message: 'Invalid product or visibility.' });
+    const [user, product] = await Promise.all([User.findById(req.params.id).select('_id role').lean(), Product.findOne({ _id: req.params.productId, deletedAt: null }).select('_id').lean()]);
+    if (!user || !product) return res.status(404).json({ success: false, message: 'User or product not found.' });
+    if (String(user.role).toUpperCase() !== 'CUSTOMER') return res.status(400).json({ success: false, message: 'Customer account required.' });
+    await Visibility.findOneAndUpdate({ userId: user._id, productId: product._id }, { $set: { isHidden: req.body.hidden, updatedBy: req.user._id } }, { upsert: true, new: true, runValidators: true });
+    return res.json({ success: true, data: { hidden: req.body.hidden } });
+}));
 router.post('/users/adjust-debt', adminOnly, walletLimiter, validateBody(schemas.debtAdjustment), walletCtrl.adjustDebt);
 router.get('/users/:id', requirePermission('VIEW_USERS'), resolveUserNumber('id'), usersCtrl.getUserById);
 router.patch('/users/:id', requirePermission('MANAGE_USERS'), resolveUserNumber('id'), validateBody(schemas.updateUser), usersCtrl.updateUser);

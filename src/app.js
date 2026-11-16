@@ -24,6 +24,11 @@ const depositRoutes = require('./modules/deposits/deposit.routes');
 const providerRoutes = require('./modules/providers/provider.routes');
 const adminCatalogRoutes = require('./modules/admin/admin.catalog.routes');
 const adminSettingsService = require('./modules/admin/admin.settings.service');
+const productRecoveryRoutes = require('./modules/admin/productRecovery.routes');
+const maintenanceRoutes = require('./modules/maintenance/maintenance.routes');
+const publicThemeRoutes = require('./modules/theme/theme.routes');
+const adminThemeRoutes = require('./modules/theme/platform.routes');
+const maintenanceGate = require('./shared/middlewares/maintenanceGate');
 const adminRoutes = require('./modules/admin/admin.routes');    // ← dashboard router
 const meRoutes = require('./modules/me/me.routes');          // ← user panel
 const targetRoutes = require('./modules/targets/target.routes'); // ← target coin purchases
@@ -119,7 +124,11 @@ app.use(API_PREFIX, (req, res, next) => {
     return apiLimiter(req, res, next);
 });
 
-app.use('/client/api', compatApiLimiter, clientCompatRoutes);
+app.use('/client/api', compatApiLimiter, maintenanceGate, clientCompatRoutes);
+
+// Keep the status endpoint available so administrators can always disable maintenance.
+app.use(`${API_PREFIX}/maintenance`, maintenanceRoutes);
+app.use(API_PREFIX, maintenanceGate);
 
 app.use(`${API_PREFIX}/auth`, authRoutes);
 app.use(`${API_PREFIX}/users`, userRoutes);
@@ -132,7 +141,7 @@ app.use(`${API_PREFIX}/deposits`, depositRoutes);
 app.use(`${API_PREFIX}/payment-events`, paymentEventRoutes);
 app.use(`${API_PREFIX}/providers`, providerRoutes);
 app.use(`${API_PREFIX}/v1/reseller`, resellerRoutes);
-app.use(`${API_PREFIX}/client/api`, compatApiLimiter, clientCompatRoutes);
+app.use(`${API_PREFIX}/client/api`, compatApiLimiter, maintenanceGate, clientCompatRoutes);
 app.use(`${API_PREFIX}/client`, resellerRoutes);
 
 // ── User Panel ─────────────────────────────────────────────────────────────────
@@ -140,6 +149,7 @@ app.use(`${API_PREFIX}/me`, meRoutes);
 app.use(`${API_PREFIX}/me/targets`, targetRoutes);
 app.use(`${API_PREFIX}/me/notifications`, notificationRoutes);
 app.use(`${API_PREFIX}/me/devices`, devicePushTokenRoutes);
+app.use(`${API_PREFIX}/theme`, publicThemeRoutes);
 
 // ── Public Categories (no auth required — used by storefront/guest pages) ─────
 app.get(`${API_PREFIX}/categories`, async (req, res) => {
@@ -226,6 +236,8 @@ app.get(`${API_PREFIX}/public/catalog`, async (req, res) => {
 // ── Admin Routes ──────────────────────────────────────────────────────────────
 app.use(`${API_PREFIX}/admin`, adminRoutes);
 app.use(`${API_PREFIX}/admin`, adminCatalogRoutes);
+app.use(`${API_PREFIX}/admin/theme`, adminThemeRoutes);
+app.use(`${API_PREFIX}/admin/product-recovery`, productRecoveryRoutes);
 app.use(`${API_PREFIX}/admin/currencies`, currencyRoutes);
 app.use(`${API_PREFIX}/admin/whatsapp`, whatsappRoutes);
 

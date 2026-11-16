@@ -4,6 +4,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const qrcode = require('qrcode');
 const config = require('../../config/config');
+const { Setting } = require('../admin/setting.model');
 
 let Client = null;
 let LocalAuth = null;
@@ -52,8 +53,8 @@ const setLastError = (err) => {
         : null;
 };
 
-const normalizeAdminChatId = () => {
-    const rawNumber = String(process.env.ADMIN_NOTIFICATION_NUMBER || '').trim();
+const normalizeAdminChatId = (value = process.env.ADMIN_NOTIFICATION_NUMBER || '') => {
+    const rawNumber = String(value || '').trim();
     if (!rawNumber) return null;
 
     const normalized = rawNumber.replace(/[^\d]/g, '');
@@ -245,7 +246,8 @@ const resetWhatsAppClient = async () => {
 const sendAdminNotification = async (message) => {
     if (config.safeLocalProductionMode) return null;
 
-    const chatId = normalizeAdminChatId();
+    const savedNumber = await Setting.findOne({ key: 'adminNotificationWhatsApp' }).select('value').lean();
+    const chatId = normalizeAdminChatId(savedNumber?.value || process.env.ADMIN_NOTIFICATION_NUMBER || '');
 
     if (!chatId) {
         throw new Error('ADMIN_NOTIFICATION_NUMBER is not configured.');

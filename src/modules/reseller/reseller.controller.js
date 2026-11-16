@@ -11,7 +11,8 @@ const { buildPublicWalletSummary } = require('../../shared/utils/walletSummary')
 
 const toPublicProduct = async (product, reseller) => {
     const percentage = Number(reseller.groupId?.percentage || 0);
-    const priceUsd = calculateFinalPrice(product.basePrice, percentage);
+    const override = await require('../users/userProductVisibility.service').getOverride(reseller._id, product._id);
+    const priceUsd = require('../users/userProductPriceFloor').resolveCustomPrice(product, override?.priceOverride, percentage).price ?? calculateFinalPrice(product.basePrice, percentage);
     const userCurrency = String(reseller.currency || 'USD').toUpperCase();
     const converted = await convertUsdToUserCurrency(Number(priceUsd), userCurrency);
 
@@ -83,8 +84,9 @@ const listProducts = catchAsync(async (req, res) => {
         });
     }
 
-    const products = await Product.find({ isActive: true, deletedAt: null })
-        .select('name description image category minQty maxQty basePrice orderFields dynamicFields displayOrder')
+    const hiddenIds = await require('../users/userProductVisibility.service').hiddenProductIds(req.reseller._id);
+    const products = await Product.find({ isActive: true, deletedAt: null, _id: { $nin: hiddenIds } })
+        .select('name description image category minQty maxQty basePrice provider providerPrice orderFields dynamicFields displayOrder')
         .sort({ displayOrder: 1, name: 1 })
         .lean();
 
