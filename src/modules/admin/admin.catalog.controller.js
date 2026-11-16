@@ -182,6 +182,7 @@ const createProduct = catchAsync(async (req, res) => {
         displayAccountNumber,
         showAccountNumber,
         isActive,
+        hideFromApi,
         executionType,
         orderFields,
         providerMapping,
@@ -199,6 +200,7 @@ const createProduct = catchAsync(async (req, res) => {
         displayAccountNumber: displayAccountNumber ?? null,
         showAccountNumber: showAccountNumber ?? false,
         isActive: isActive ?? true,
+        hideFromApi: hideFromApi ?? false,
         executionType: executionType ?? 'manual',
         orderFields: orderFields ?? [],
         providerMapping: providerMapping ?? {},
@@ -245,6 +247,7 @@ const createProductFromProvider = catchAsync(async (req, res) => {
         markupType,
         markupValue,
         isActive,
+        hideFromApi,
     } = req.body;
 
     try {
@@ -261,6 +264,7 @@ const createProductFromProvider = catchAsync(async (req, res) => {
             markupType,
             markupValue,
             isActive,
+            hideFromApi,
             executionType,
             displayOrder,
             displayAccountNumber,

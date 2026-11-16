@@ -192,13 +192,29 @@ router.get('/users/:id/product-visibility', requirePermission('VIEW_USERS'), res
     ]);
     const percentage = user.groupId?.isActive ? Number(user.groupId.percentage || 0) : null;
     const canSeeSupplierPrice = req.user.role === 'ADMIN' || req.user.permissions?.includes('MANAGE_PRODUCTS');
-    return res.json({ success: true, data: products.map((product) => ({ id: String(product._id), name: product.name, image: product.image, isActive: product.isActive, hidden: Boolean(overrides.get(String(product._id))?.isHidden), priceOverride: overrides.get(String(product._id))?.priceOverride ?? null,
+    const safeGroupPrice = (price) => {
+        if (percentage === null || price == null || String(price).trim() === '') return null;
+        try { return calculateFinalPrice(price, percentage); } catch { return null; }
+    };
+    return res.json({ success: true, data: products.map((product) => ({ id: String(product._id), name: product.name, image: product.image, isActive: product.isActive, hidden: Boolean(overrides.get(String(product._id))?.isHidden), apiHidden: Boolean(overrides.get(String(product._id))?.isHiddenFromApi), priceOverride: overrides.get(String(product._id))?.priceOverride ?? null,
         supplierPrice: canSeeSupplierPrice && product.provider ? product.providerPrice ?? null : null,
         basePrice: product.basePrice ?? null, groupPercentage: percentage,
-        groupPrice: percentage !== null && product.basePrice != null ? calculateFinalPrice(product.basePrice, percentage) : null,
+        groupPrice: safeGroupPrice(product.basePrice),
         effectiveCustomPrice: percentage !== null ? require('../users/userProductPriceFloor').resolveCustomPrice(product, overrides.get(String(product._id))?.priceOverride, percentage).price : null,
         followsSupplier: percentage !== null && require('../users/userProductPriceFloor').resolveCustomPrice(product, overrides.get(String(product._id))?.priceOverride, percentage).usingSupplierPrice,
         billingMode: user.groupId?.billingMode || 'standard' })) });
+}));
+router.patch('/users/:id/product-api-visibility/:productId', requirePermission('MANAGE_USERS'), resolveUserNumber('id'), catchAsync(async (req, res) => {
+    const mongoose = require('mongoose');
+    const { User } = require('../users/user.model');
+    const { Product } = require('../products/product.model');
+    const Visibility = require('../users/userProductVisibility.model');
+    if (!mongoose.isValidObjectId(req.params.productId) || typeof req.body?.hidden !== 'boolean') return res.status(400).json({ success: false, message: 'Invalid product or visibility.' });
+    const [user, product] = await Promise.all([User.findById(req.params.id).select('_id role').lean(), Product.findOne({ _id: req.params.productId, deletedAt: null }).select('_id').lean()]);
+    if (!user || !product) return res.status(404).json({ success: false, message: 'User or product not found.' });
+    if (user.role !== 'CUSTOMER') return res.status(400).json({ success: false, message: 'Customer account required.' });
+    await Visibility.findOneAndUpdate({ userId: user._id, productId: product._id }, { $set: { isHiddenFromApi: req.body.hidden, updatedBy: req.user._id } }, { upsert: true, new: true, runValidators: true });
+    return res.json({ success: true, data: { hidden: req.body.hidden } });
 }));
 router.patch('/users/:id/product-price/:productId', requirePermission('MANAGE_USERS'), requirePermission('MANAGE_PRODUCTS'), resolveUserNumber('id'), catchAsync(async (req, res) => {
     const mongoose = require('mongoose');

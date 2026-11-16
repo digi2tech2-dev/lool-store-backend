@@ -107,6 +107,8 @@ const createProductValidation = [
         .optional()
         .isBoolean().withMessage('showAccountNumber must be a boolean'),
 
+    body('hideFromApi').optional().isBoolean().withMessage('hideFromApi must be a boolean'),
+
     body('isActive')
         .optional()
         .isBoolean().withMessage('isActive must be a boolean'),
@@ -235,6 +237,8 @@ const publishProductValidation = [
         .optional()
         .isBoolean().withMessage('showAccountNumber must be a boolean'),
 
+    body('hideFromApi').optional().isBoolean().withMessage('hideFromApi must be a boolean'),
+
     body('isActive')
         .optional()
         .isBoolean(),
@@ -340,6 +344,8 @@ const updateProductValidation = [
     body('showAccountNumber')
         .optional()
         .isBoolean().withMessage('showAccountNumber must be a boolean'),
+
+    body('hideFromApi').optional().isBoolean().withMessage('hideFromApi must be a boolean'),
 
     body('isActive')
         .optional()

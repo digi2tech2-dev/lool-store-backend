@@ -26,4 +26,10 @@ async function getOverride(userId, productId, session = null) {
     return query;
 }
 
-module.exports = { hiddenProductIds, isHidden, getOverrides, getOverride };
+async function hiddenApiProductIds(userId) {
+    if (!userId) return [];
+    const rows = await Visibility.find({ userId, $or: [{ isHidden: true }, { isHiddenFromApi: true }] }).select('productId').lean();
+    return rows.map((row) => row.productId);
+}
+
+module.exports = { hiddenProductIds, hiddenApiProductIds, isHidden, getOverrides, getOverride };

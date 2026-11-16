@@ -36,6 +36,7 @@ const PRODUCT_SELECT = [
     'basePrice',
     'provider',
     'providerPrice',
+    'hideFromApi',
     'orderFields',
     'dynamicFields',
     'displayOrder',
@@ -169,8 +170,8 @@ const listProducts = async (reseller, { productsId = '', base = false } = {}) =>
         throw new ClientCompatError('Not allowed to use API', 122, 403);
     }
 
-    const filter = { isActive: true, deletedAt: null };
-    filter._id = { $nin: await require('../users/userProductVisibility.service').hiddenProductIds(reseller._id) };
+    const filter = { isActive: true, deletedAt: null, hideFromApi: { $ne: true } };
+    filter._id = { $nin: await require('../users/userProductVisibility.service').hiddenApiProductIds(reseller._id) };
     const productIds = parseProductIds(productsId);
     if (productIds.length > 0) {
         filter.compatProductId = { $in: productIds };
@@ -218,9 +219,9 @@ const getContent = async (reseller, parentId) => {
         throw new ClientCompatError('Validation error', ERROR_CODES.VALIDATION, 400);
     }
 
-    const hiddenIds = await require('../users/userProductVisibility.service').hiddenProductIds(reseller._id);
+    const hiddenIds = await require('../users/userProductVisibility.service').hiddenApiProductIds(reseller._id);
     const [allProducts, categories] = await Promise.all([
-        Product.find({ isActive: true, deletedAt: null, _id: { $nin: hiddenIds } })
+        Product.find({ isActive: true, deletedAt: null, hideFromApi: { $ne: true }, _id: { $nin: hiddenIds } })
             .select(PRODUCT_SELECT)
             .sort({ displayOrder: 1, name: 1 })
             .lean(),
@@ -277,7 +278,7 @@ const findProductByCompatId = async (compatProductId) => {
     }
 
     const product = await Product.findOne({ compatProductId: numericId }).select(PRODUCT_SELECT);
-    if (!product || product.deletedAt) {
+    if (!product || product.deletedAt || product.hideFromApi) {
         throw new ClientCompatError('Product deleted or not found', ERROR_CODES.PRODUCT_NOT_FOUND, 404);
     }
     if (product.isActive === false) {
@@ -373,6 +374,8 @@ const createCompatOrder = async ({
     auditContext,
 }) => {
     const product = await findProductByCompatId(compatProductId);
+    const override = await require('../users/userProductVisibility.service').getOverride(reseller._id, product._id);
+    if (override?.isHidden || override?.isHiddenFromApi) throw new ClientCompatError('Product deleted or not found', ERROR_CODES.PRODUCT_NOT_FOUND, 404);
     const quantity = Number(qty);
     if (!Number.isInteger(quantity) || quantity <= 0) {
         throw new ClientCompatError('Quantity not allowed', ERROR_CODES.QUANTITY_NOT_ALLOWED, 400);

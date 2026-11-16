@@ -84,8 +84,8 @@ const listProducts = catchAsync(async (req, res) => {
         });
     }
 
-    const hiddenIds = await require('../users/userProductVisibility.service').hiddenProductIds(req.reseller._id);
-    const products = await Product.find({ isActive: true, deletedAt: null, _id: { $nin: hiddenIds } })
+    const hiddenIds = await require('../users/userProductVisibility.service').hiddenApiProductIds(req.reseller._id);
+    const products = await Product.find({ isActive: true, deletedAt: null, hideFromApi: { $ne: true }, _id: { $nin: hiddenIds } })
         .select('name description image category minQty maxQty basePrice provider providerPrice orderFields dynamicFields displayOrder')
         .sort({ displayOrder: 1, name: 1 })
         .lean();
@@ -104,6 +104,12 @@ const createOrder = catchAsync(async (req, res) => {
         customInputs,
         idempotencyKey: bodyIdempotencyKey,
     } = req.body;
+
+    const mongoose = require('mongoose');
+    if (!mongoose.isValidObjectId(productId)) return res.status(404).json({ success: false, message: 'Product not found.' });
+    const product = await Product.findById(productId).select('hideFromApi').lean();
+    const override = await require('../users/userProductVisibility.service').getOverride(req.reseller._id, productId);
+    if (!product || product.hideFromApi || override?.isHidden || override?.isHiddenFromApi) return res.status(404).json({ success: false, message: 'Product not found.' });
 
     const idempotencyKey = String(bodyIdempotencyKey || req.get('idempotency-key') || '').trim();
     if (!idempotencyKey) {

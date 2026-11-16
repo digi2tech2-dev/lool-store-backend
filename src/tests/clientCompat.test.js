@@ -518,6 +518,62 @@ describe('Client compatibility API products and content', () => {
 });
 
 describe('Client compatibility API orders', () => {
+    test('hides products from the API globally or for one customer and blocks direct ordering', async () => {
+        const { reseller, token } = await createApiReseller({ token: 'visibility-first' });
+        const { token: otherToken } = await createApiReseller({ token: 'visibility-other' });
+        const globallyHidden = await createCompatProduct();
+        await require('../modules/products/product.service').updateProduct(globallyHidden._id, { hideFromApi: true });
+        const customerHidden = await createCompatProduct();
+        const normal = await createCompatProduct();
+        const Visibility = require('../modules/users/userProductVisibility.model');
+        await Visibility.create({ userId: reseller._id, productId: customerHidden._id, isHiddenFromApi: true, priceOverride: '12' });
+
+        const first = await rawGet('/client/api/products', authHeaders(token));
+        expect(first.status).toBe(200);
+        const ids = first.body.map((item) => item.id);
+        expect(ids).toContain(normal.compatProductId);
+        expect(ids).not.toContain(globallyHidden.compatProductId);
+        expect(ids).not.toContain(customerHidden.compatProductId);
+        const other = await rawGet('/client/api/products', authHeaders(otherToken));
+        expect(other.body.map((item) => item.id)).toContain(customerHidden.compatProductId);
+        expect(other.body.map((item) => item.id)).not.toContain(globallyHidden.compatProductId);
+
+        const v1 = await rawGet('/api/v1/reseller/products', authHeaders(token));
+        expect(v1.status).toBe(200);
+        const v1Ids = v1.body.data.map((item) => item.id);
+        expect(v1Ids).toContain(String(normal._id));
+        expect(v1Ids).not.toContain(String(globallyHidden._id));
+        expect(v1Ids).not.toContain(String(customerHidden._id));
+
+        const jwt = require('jsonwebtoken');
+        const config = require('../config/config');
+        const websiteToken = jwt.sign({ id: String(reseller._id) }, config.jwt.secret, { expiresIn: '10m' });
+        const website = await rawGet('/api/products', { Authorization: `Bearer ${websiteToken}` });
+        expect(website.status).toBe(200);
+        expect(website.body.data.map((item) => String(item._id))).toEqual(expect.arrayContaining([String(globallyHidden._id), String(customerHidden._id)]));
+
+        for (const product of [globallyHidden, customerHidden]) {
+            const result = await rawPost('/client/api/orders', { product_id: product.compatProductId, qty: 1, order_uuid: `hidden-${product._id}`, fields: { player_id: '123' } }, authHeaders(token));
+            expect(result.status).toBe(404);
+            const v1Order = await rawPost('/api/v1/reseller/orders', { productId: String(product._id), quantity: 1, idempotencyKey: `hidden-${product._id}` }, authHeaders(token));
+            expect(v1Order.status).toBe(404);
+        }
+        const { User } = require('../modules/users/user.model');
+        expect((await User.findById(reseller._id)).walletBalance).toBe(100);
+
+        const { createAdmin } = require('./testHelpers');
+        const admin = await createAdmin();
+        const adminToken = jwt.sign({ id: String(admin._id) }, config.jwt.secret, { expiresIn: '10m' });
+        const update = await fetch(`${baseUrl}/api/admin/users/${reseller._id}/product-api-visibility/${customerHidden._id}`, {
+            method: 'PATCH', headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ hidden: false }),
+        });
+        expect(update.status).toBe(200);
+        const saved = await Visibility.findOne({ userId: reseller._id, productId: customerHidden._id }).lean();
+        expect(saved.isHiddenFromApi).toBe(false);
+        expect(saved.priceOverride).toBe('12');
+        const after = await rawGet('/client/api/products', authHeaders(token));
+        expect(after.body.map((item) => item.id)).toContain(customerHidden.compatProductId);
+    });
     test('creates canonical POST orders and exposes UUID, currency, fields, and uuids checks', async () => {
         const { token } = await createApiReseller({ token: 'canonical-post-token' });
         const product = await createCompatProduct({ executionType: 'manual' });

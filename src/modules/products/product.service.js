@@ -108,6 +108,7 @@ const createProduct = async ({
     displayAccountNumber = null,
     showAccountNumber = false,
     isActive = true,
+    hideFromApi = false,
     executionType = 'manual',
     costPrice = 0,
     orderFields = [],
@@ -177,6 +178,7 @@ const createProduct = async ({
         displayAccountNumber,
         showAccountNumber,
         isActive,
+        hideFromApi,
         pricingMode,
         markupType,
         markupValue,
@@ -226,6 +228,7 @@ const publishFromProviderProduct = async ({
     displayAccountNumber = null,
     showAccountNumber = false,
     isActive = true,
+    hideFromApi = false,
     pricingMode = PRICING_MODES.MANUAL,
     markupType = MARKUP_TYPES.PERCENTAGE,
     markupValue = 0,
@@ -307,6 +310,7 @@ const publishFromProviderProduct = async ({
         displayAccountNumber,
         showAccountNumber,
         isActive,
+        hideFromApi,
         pricingMode,
         markupType,
         markupValue,
@@ -346,7 +350,7 @@ const updateProduct = async (productId, updates) => {
     if (!product) throw new NotFoundError('Product');
 
     const ALLOWED = [
-        'name', 'description', 'image', 'category', 'displayOrder', 'isActive',
+        'name', 'description', 'image', 'category', 'displayOrder', 'isActive', 'hideFromApi',
         'displayAccountNumber', 'showAccountNumber',
         'basePrice', 'minQty', 'maxQty', 'pricingMode', 'markupType', 'markupValue',
         'executionType', 'costPrice', 'orderFields', 'dynamicFields', 'providerMapping',
