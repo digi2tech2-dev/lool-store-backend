@@ -314,6 +314,7 @@ const extractOrderFieldsFromQuery = (query = {}) => {
 
 module.exports = {
     toNumber,
+    toCompatPrice,
     toFixedCompatNumber,
     mapStatus,
     formatDateTime,

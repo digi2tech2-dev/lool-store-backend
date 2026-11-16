@@ -8,6 +8,8 @@ const { convertUsdToUserCurrency } = require('../../services/currencyConverter.s
 const { sendSuccess, sendCreated } = require('../../shared/utils/apiResponse');
 const catchAsync = require('../../shared/utils/catchAsync');
 const { buildPublicWalletSummary } = require('../../shared/utils/walletSummary');
+const { multiply } = require('../../shared/utils/decimalPrecision');
+const { toCompatPrice } = require('../clientCompat/clientCompat.mappers');
 
 const toPublicProduct = async (product, reseller) => {
     const percentage = Number(reseller.groupId?.percentage || 0);
@@ -25,7 +27,9 @@ const toPublicProduct = async (product, reseller) => {
         minQty: product.minQty,
         maxQty: product.maxQty,
         priceUsd,
-        price: Number(converted.finalAmount),
+        // Conversion of the catalog quote must preserve decimal digits. Wallet
+        // debits keep their own existing currency-rounding policy.
+        price: toCompatPrice(multiply(priceUsd, String(converted.rate))),
         currency: converted.currency,
         rate: converted.rate,
         fields: (Array.isArray(product.orderFields) && product.orderFields.length > 0

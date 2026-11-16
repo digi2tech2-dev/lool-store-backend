@@ -391,6 +391,31 @@ describe('Client compatibility API products and content', () => {
         })]);
     });
 
+    test('product API prices retain supplier precision in USD and converted currencies', async () => {
+        const price = '0.1234567890123456789';
+        const product = await createCompatProduct({ basePrice: price });
+        const { token } = await createApiReseller({ token: 'precision-usd', userOverrides: { currency: 'USD' } });
+        const compat = await rawGet(`/client/api/products?products_id=${product.compatProductId}`, authHeaders(token));
+        expect(compat.status).toBe(200);
+        expect(String(compat.body[0].price)).toBe(price);
+        const usd = await rawGet('/api/v1/reseller/products', authHeaders(token));
+        expect(usd.status).toBe(200);
+        const usdProduct = usd.body.data.find((item) => item.id === String(product._id));
+        expect(String(usdProduct.price)).toBe(price);
+        expect(usdProduct.priceUsd).toBe(price);
+
+        const { Currency } = require('../modules/currency/currency.model');
+        const converter = require('../services/currencyConverter.service');
+        await Currency.create({ code: 'EGP', name: 'Egyptian Pound', symbol: 'EGP', platformRate: 50, isActive: true });
+        converter.invalidateCurrencyCache('EGP');
+        const egpReseller = await createApiReseller({ token: 'precision-egp', userOverrides: { currency: 'EGP' } });
+        const egp = await rawGet('/api/v1/reseller/products', authHeaders(egpReseller.token));
+        expect(egp.status).toBe(200);
+        const egpProduct = egp.body.data.find((item) => item.id === String(product._id));
+        expect(String(egpProduct.price)).toBe('6.172839450617283945');
+        expect(egpProduct.priceUsd).toBe(price);
+    });
+
     test('returns root and category content without exposing legacy /api/client behavior', async () => {
         const { token } = await createApiReseller({ token: 'content-token' });
         const category = await createCompatCategory({ name: 'Root Category' });
