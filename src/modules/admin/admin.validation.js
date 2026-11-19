@@ -90,7 +90,8 @@ const listUsersQuery = Joi.object({
     role: Joi.string().valid('ADMIN', 'SUPERVISOR', 'CUSTOMER'),
     from: Joi.date().iso(),
     to: Joi.date().iso().min(Joi.ref('from')),
-    sortBy: Joi.string().valid('createdAt', 'userNumber', 'walletBalance', 'name', 'email', 'status', 'role').default('createdAt'),
+    sortBy: Joi.string().valid('createdAt', 'userNumber', 'walletBalance', 'balanceUsd', 'name', 'email', 'status', 'role').default('createdAt'),
+    debtors: Joi.boolean().default(false),
     sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
 });
 
@@ -334,7 +335,7 @@ const updateAdminProductSchema = Joi.object({
     providerProduct: objectId().allow(null),
     syncPriceWithProvider: Joi.boolean(),
     enableManualPrice: Joi.boolean(),
-    manualPriceAdjustment: Joi.alternatives().try(Joi.number(), Joi.string().trim()),
+    manualPriceAdjustment: Joi.alternatives().try(Joi.string().trim().pattern(/^[+-]?(?:\d+\.?\d*|\.\d+)$/), Joi.number()),
     finalPrice: Joi.alternatives().try(Joi.number(), Joi.string().trim()).allow(null),
 }).min(1);
 

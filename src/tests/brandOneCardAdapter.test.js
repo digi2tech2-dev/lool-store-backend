@@ -156,18 +156,18 @@ test('sync engine persists converted USD and propagates USD plus markup to publi
     const upsert = jest.spyOn(ProviderProduct, 'findOneAndUpdate').mockResolvedValue({ _id: 'pp-test' });
     jest.spyOn(ProviderProduct, 'updateMany').mockResolvedValue({ modifiedCount: 0 });
     jest.spyOn(Product, 'find').mockReturnValue({ select: async () => [{ _id: 'published-test', markupType: 'percentage', markupValue: 10 }] });
-    const publish = jest.spyOn(Product, 'findByIdAndUpdate').mockResolvedValue({});
+    const publish = jest.spyOn(Product, 'findOneAndUpdate').mockResolvedValue({});
     const { client } = make();
     expect(await syncProviderProducts(provider._id, { httpClient: client })).toMatchObject({ totalFetched: 1, pricesSynced: 1, errors: [] });
     expect(upsert.mock.calls[0][1].$set).toMatchObject({ rawPrice: '1', rawPayload: { sourcePrice: '50', sourceCurrency: 'EGP' } });
-    expect(publish).toHaveBeenCalledWith('published-test', { $set: { providerPrice: '1', finalPrice: '1.1', basePrice: '1.1' } });
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({ _id: 'published-test', providerProduct: 'pp-test' }), { $set: { providerPrice: '1', finalPrice: '1.1', basePrice: '1.1' } });
 });
 test('sync engine performs no price writes or deactivation when currency setup is invalid', async () => {
     jest.spyOn(Provider, 'findById').mockResolvedValue({ ...providerData, _id: 'provider-test', isActive: true });
     jest.spyOn(Currency, 'findOne').mockResolvedValue({ isActive: false, platformRate: 50 });
     const upsert = jest.spyOn(ProviderProduct, 'findOneAndUpdate');
     const deactivate = jest.spyOn(ProviderProduct, 'updateMany');
-    const publish = jest.spyOn(Product, 'findByIdAndUpdate');
+    const publish = jest.spyOn(Product, 'findOneAndUpdate');
     await expect(syncProviderProducts('provider-test', { httpClient: make().client }))
         .rejects.toMatchObject({ code: 'PROVIDER_CURRENCY_RATE_INVALID' });
     expect(upsert).not.toHaveBeenCalled();

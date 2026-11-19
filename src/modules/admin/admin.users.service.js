@@ -30,7 +30,7 @@ const _findOrFail = async (id) => {
     return user;
 };
 
-const USER_LIST_SORT_FIELDS = new Set(['createdAt', 'userNumber', 'walletBalance', 'name', 'email', 'status', 'role']);
+const USER_LIST_SORT_FIELDS = new Set(['createdAt', 'userNumber', 'walletBalance', 'balanceUsd', 'name', 'email', 'status', 'role']);
 
 // ─── List ──────────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,7 @@ const listUsers = async ({
     limit = 20,
     sortBy = 'createdAt',
     sortOrder = 'desc',
+    debtors = false,
 } = {}) => {
     const normalizedPage = Number.isFinite(Number(page)) && Number(page) > 0
         ? Math.floor(Number(page))
@@ -76,6 +77,7 @@ const listUsers = async ({
     const normalizedSortOrder = String(sortOrder || '').trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
 
     const filter = { deletedAt: null, verified: true };
+    if (debtors === true) filter.walletBalance = { $lt: 0 };
     if (status) filter.status = status;
     if (verified != null) filter.verified = verified;
     if (role) filter.role = role;
@@ -101,15 +103,39 @@ const listUsers = async ({
 
     const sort = { [normalizedSortBy]: normalizedSortOrder === 'asc' ? 1 : -1 };
 
-    const [users, total] = await Promise.all([
-        User.find(filter)
+    const findUsers = () => User.find(filter)
             .select('-password -emailVerificationToken -emailVerificationExpires')
-            .populate('groupId', 'name percentage')
+            .populate('groupId', 'name percentage');
+    let users;
+    let total;
+    if (normalizedSortBy === 'balanceUsd') {
+        const { Currency } = require('../currency/currency.model');
+        // platformRate is units of currency per USD; missing rates go last.
+        const [rows, count] = await Promise.all([
+            User.aggregate([
+                { $match: filter },
+                { $lookup: { from: Currency.collection.name, localField: 'currency', foreignField: 'code', as: '_balanceCurrency' } },
+                { $set: { _rate: { $cond: [{ $eq: ['$currency', 'USD'] }, 1, { $ifNull: [{ $arrayElemAt: ['$_balanceCurrency.platformRate', 0] }, null] }] } } },
+                { $set: { _usdBalance: { $cond: [{ $gt: ['$_rate', 0] }, { $divide: [{ $ifNull: ['$walletBalance', 0] }, '$_rate'] }, null] }, _missingRate: { $cond: [{ $gt: ['$_rate', 0] }, 0, 1] } } },
+                { $sort: { _missingRate: 1, _usdBalance: normalizedSortOrder === 'asc' ? 1 : -1, _id: 1 } },
+                { $skip: skip }, { $limit: normalizedLimit }, { $project: { _id: 1 } },
+            ]),
+            User.countDocuments(filter),
+        ]);
+        const ids = rows.map((row) => row._id);
+        const docs = await findUsers().where('_id').in(ids);
+        const byId = new Map(docs.map((doc) => [String(doc._id), doc]));
+        users = ids.map((id) => byId.get(String(id))).filter(Boolean);
+        total = count;
+    } else {
+        [users, total] = await Promise.all([
+        findUsers()
             .sort(sort)
             .skip(skip)
             .limit(normalizedLimit),
         User.countDocuments(filter),
-    ]);
+        ]);
+    }
 
     return {
         users,

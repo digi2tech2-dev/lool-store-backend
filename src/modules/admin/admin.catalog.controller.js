@@ -51,7 +51,11 @@ const syncAll = catchAsync(async (req, res) => {
  * Query: ?search= &page= &limit= &providerId= &isActive=
  */
 const listAllProviderProducts = catchAsync(async (req, res) => {
-    const { search, page = 1, limit = 50, providerId, isActive } = req.query;
+    const { search, page = 1, limit = 50, providerId, isActive, sortBy } = req.query;
+
+    if (sortBy === 'price' && (String(search || '').trim().length < 3 || String(search || '').trim().length > 100)) {
+        return res.status(400).json({ success: false, message: 'Search must contain between 3 and 100 characters.' });
+    }
 
     const filter = {};
     if (providerId) filter.provider = providerId;
@@ -61,6 +65,7 @@ const listAllProviderProducts = catchAsync(async (req, res) => {
         page: parseInt(page, 10),
         limit: Math.min(parseInt(limit, 10), 200),
         search,
+        sortByPrice: sortBy === 'price',
     });
 
     sendPaginated(res, products, pagination, 'Provider products retrieved.');
@@ -183,6 +188,8 @@ const createProduct = catchAsync(async (req, res) => {
         showAccountNumber,
         isActive,
         hideFromApi,
+        enableManualPrice,
+        manualPriceAdjustment,
         executionType,
         orderFields,
         providerMapping,
@@ -201,6 +208,8 @@ const createProduct = catchAsync(async (req, res) => {
         showAccountNumber: showAccountNumber ?? false,
         isActive: isActive ?? true,
         hideFromApi: hideFromApi ?? false,
+        enableManualPrice: enableManualPrice ?? false,
+        manualPriceAdjustment: manualPriceAdjustment ?? '0',
         executionType: executionType ?? 'manual',
         orderFields: orderFields ?? [],
         providerMapping: providerMapping ?? {},
@@ -248,6 +257,8 @@ const createProductFromProvider = catchAsync(async (req, res) => {
         markupValue,
         isActive,
         hideFromApi,
+        enableManualPrice,
+        manualPriceAdjustment,
     } = req.body;
 
     try {
@@ -265,6 +276,8 @@ const createProductFromProvider = catchAsync(async (req, res) => {
             markupValue,
             isActive,
             hideFromApi,
+            enableManualPrice,
+            manualPriceAdjustment,
             executionType,
             displayOrder,
             displayAccountNumber,

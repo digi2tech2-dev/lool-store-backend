@@ -49,7 +49,17 @@ const { ProviderProduct } = require('./providerProduct.model');
 const { Product, PRICING_MODES, computeFinalPrice } = require('../products/product.model');
 const { getAdapter } = require('./adapters/adapter.factory');
 const { NotFoundError, BusinessRuleError } = require('../../shared/errors/AppError');
-const { normalizeProviderDecimalPrice } = require('../../shared/utils/decimalPrecision');
+const { normalizeProviderDecimalPrice, add, isPositive } = require('../../shared/utils/decimalPrecision');
+
+const syncedPrice = (rawPrice, product) => {
+    const result = product.enableManualPrice
+        ? add(rawPrice, product.manualPriceAdjustment ?? '0')
+        : computeFinalPrice(rawPrice, product.markupType, product.markupValue);
+    if (product.enableManualPrice && !isPositive(result)) {
+        throw new BusinessRuleError('The supplier price plus the manual adjustment must be greater than zero.', 'INVALID_FINAL_PRICE');
+    }
+    return result;
+};
 
 // =============================================================================
 // CONFIGURATION
@@ -312,19 +322,21 @@ const _performSync = async (provider, adapterOptions) => {
             const products = await Product.find({
                 providerProduct: providerProductId,
                 pricingMode: PRICING_MODES.SYNC,
-            }).select('markupType markupValue');
+            }).select('markupType markupValue enableManualPrice manualPriceAdjustment');
 
             for (const product of products) {
-                const newFinalPrice = computeFinalPrice(rawPrice, product.markupType, product.markupValue);
+                const newFinalPrice = syncedPrice(rawPrice, product);
                 const newBasePrice = newFinalPrice ?? String(rawPrice);
 
-                await Product.findByIdAndUpdate(product._id, {
+                const updated = await Product.findOneAndUpdate({ _id: product._id, providerProduct: providerProductId, pricingMode: PRICING_MODES.SYNC,
+                    ...(product.enableManualPrice ? { enableManualPrice: true, manualPriceAdjustment: product.manualPriceAdjustment } : { enableManualPrice: { $ne: true } }) }, {
                     $set: {
                         providerPrice: String(rawPrice),
                         finalPrice: newFinalPrice,
                         basePrice: newBasePrice,
                     },
                 });
+                if (!updated) throw new Error('Product pricing changed during supplier sync; retry the sync.');
                 pricesSynced++;
             }
         } catch (err) {
@@ -465,21 +477,23 @@ const recalcProductPrices = async (providerProductId) => {
     const products = await Product.find({
         providerProduct: providerProductId,
         pricingMode: PRICING_MODES.SYNC,
-    }).select('markupType markupValue');
+    }).select('markupType markupValue enableManualPrice manualPriceAdjustment');
 
     let modifiedCount = 0;
 
     for (const product of products) {
-        const newFinalPrice = computeFinalPrice(rawPrice, product.markupType, product.markupValue);
+        const newFinalPrice = syncedPrice(rawPrice, product);
         const newBasePrice = newFinalPrice ?? rawPrice;
 
-        await Product.findByIdAndUpdate(product._id, {
+        const updated = await Product.findOneAndUpdate({ _id: product._id, providerProduct: providerProductId, pricingMode: PRICING_MODES.SYNC,
+            ...(product.enableManualPrice ? { enableManualPrice: true, manualPriceAdjustment: product.manualPriceAdjustment } : { enableManualPrice: { $ne: true } }) }, {
             $set: {
                 providerPrice: rawPrice,
                 finalPrice: newFinalPrice,
                 basePrice: newBasePrice,
             },
         });
+        if (!updated) throw new Error('Product pricing changed during supplier sync; retry the sync.');
         modifiedCount++;
     }
 

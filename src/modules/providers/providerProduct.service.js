@@ -199,7 +199,7 @@ const ensureKarakDynamicProduct = (providerId) => ensureDynamicProduct(
  * @param {string} [opts.search]        - partial text match on rawName / translatedName
  * @returns {Promise<{ products, pagination }>}
  */
-const listProviderProducts = async (filter = {}, { page = 1, limit = 500, search } = {}) => {
+const listProviderProducts = async (filter = {}, { page = 1, limit = 500, search, sortByPrice = false } = {}) => {
     const query = { ...filter };
 
     if (query.provider) {
@@ -212,6 +212,19 @@ const listProviderProducts = async (filter = {}, { page = 1, limit = 500, search
     }
 
     const skip = (page - 1) * limit;
+
+    if (sortByPrice) {
+        const Decimal = require('decimal.js');
+        const rows = await ProviderProduct.find(query).select('provider externalProductId rawName translatedName rawPrice minQty maxQty isActive').populate('provider', 'name slug isActive').lean();
+        const active = rows.filter((row) => row.provider && row.provider.isActive !== false);
+        const price = (row) => { try { const value = new Decimal(String(row.rawPrice)); return value.isFinite() && value.gt(0) ? value : null; } catch { return null; } };
+        active.sort((a, b) => {
+            const ap = price(a); const bp = price(b);
+            if (!ap || !bp) return ap ? -1 : bp ? 1 : String(a._id).localeCompare(String(b._id));
+            return ap.comparedTo(bp) || String(a._id).localeCompare(String(b._id));
+        });
+        return { products: active.slice(skip, skip + limit).map(normalizeDealerDynamicProduct), pagination: { page, limit, total: active.length, pages: Math.ceil(active.length / limit) } };
+    }
 
     const [products, total] = await Promise.all([
         ProviderProduct.find(query)

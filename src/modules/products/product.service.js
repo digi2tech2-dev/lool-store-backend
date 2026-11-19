@@ -119,6 +119,8 @@ const createProduct = async ({
     pricingMode = PRICING_MODES.MANUAL,
     markupType = MARKUP_TYPES.PERCENTAGE,
     markupValue = 0,
+    enableManualPrice = false,
+    manualPriceAdjustment = '0',
 }, adminUserId = null) => {
     const existing = await Product.findOne({ name: new RegExp(`^${name}$`, 'i') });
     if (existing) throw new ConflictError(`A product named '${name}' already exists.`);
@@ -158,6 +160,11 @@ const createProduct = async ({
         }
     }
 
+    if (enableManualPrice && resolvedProviderPrice !== null) {
+        resolvedFinalPrice = add(resolvedProviderPrice, String(manualPriceAdjustment));
+        if (!isPositive(resolvedFinalPrice)) throw new BusinessRuleError('Final price must be greater than zero.', 'INVALID_FINAL_PRICE');
+        resolvedBasePrice = resolvedFinalPrice;
+    }
     // Guard: if computed price is 0 but admin supplied a valid basePrice, use it
     if (!isPositive(resolvedBasePrice) && isPositive(basePrice)) {
         resolvedBasePrice = String(basePrice);
@@ -179,6 +186,8 @@ const createProduct = async ({
         showAccountNumber,
         isActive,
         hideFromApi,
+        enableManualPrice,
+        manualPriceAdjustment: String(manualPriceAdjustment),
         pricingMode,
         markupType,
         markupValue,
@@ -232,6 +241,8 @@ const publishFromProviderProduct = async ({
     pricingMode = PRICING_MODES.MANUAL,
     markupType = MARKUP_TYPES.PERCENTAGE,
     markupValue = 0,
+    enableManualPrice = false,
+    manualPriceAdjustment = '0',
     executionType = 'automatic',
     costPrice = 0,
     dynamicFields = [],
@@ -290,6 +301,11 @@ const publishFromProviderProduct = async ({
         }
     }
 
+    if (enableManualPrice) {
+        resolvedFinalPrice = add(providerPrice, String(manualPriceAdjustment));
+        if (!isPositive(resolvedFinalPrice)) throw new BusinessRuleError('Final price must be greater than zero.', 'INVALID_FINAL_PRICE');
+        resolvedBasePrice = resolvedFinalPrice;
+    }
     // Guard: if computed price is 0 but admin supplied a valid basePrice, use it
     if (!isPositive(resolvedBasePrice) && basePrice != null && isPositive(basePrice)) {
         resolvedBasePrice = String(basePrice);
@@ -311,6 +327,8 @@ const publishFromProviderProduct = async ({
         showAccountNumber,
         isActive,
         hideFromApi,
+        enableManualPrice,
+        manualPriceAdjustment: String(manualPriceAdjustment),
         pricingMode,
         markupType,
         markupValue,
@@ -450,11 +468,13 @@ const updateProduct = async (productId, updates) => {
     const effectiveEnableManual = safe.enableManualPrice ?? product.enableManualPrice;
     const effectiveManualAdj = safe.manualPriceAdjustment ?? product.manualPriceAdjustment ?? 0;
 
-    if (!providerLinkChanged && effectiveEnableManual && hasProviderLink) {
-        const pp = product.providerProduct;
+    if (effectiveEnableManual && (hasProviderLink || incomingProviderProduct)) {
+        const pp = providerLinkChanged ? await ProviderProduct.findById(incomingProviderProduct).select('rawPrice rawPayload') : product.providerProduct;
+        if (!pp) throw new NotFoundError('ProviderProduct');
         const effectiveRawPrice = getCanonicalProviderProductPrice(pp);
         const rawPrice = effectiveRawPrice;
         const computedFinal = add(rawPrice, String(effectiveManualAdj));
+        if (!isPositive(computedFinal)) throw new BusinessRuleError('Final price must be greater than zero.', 'INVALID_FINAL_PRICE');
         safe.providerPrice = rawPrice;
         safe.finalPrice = computedFinal;
         safe.basePrice = computedFinal;

@@ -120,7 +120,7 @@ test.each([
     jest.spyOn(Product, 'find').mockReturnValue({ select: async () => [
         { _id: 'published', markupType: 'percentage', markupValue: 10 },
     ] });
-    const publish = jest.spyOn(Product, 'findByIdAndUpdate').mockResolvedValue({});
+    const publish = jest.spyOn(Product, 'findOneAndUpdate').mockResolvedValue({});
     const result = await syncProviderProducts(provider._id, { httpClient: adapter._client });
     expect(result.errors).toEqual([]);
     expect(result.totalFetched).toBe(1);
