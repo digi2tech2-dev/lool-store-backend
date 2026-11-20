@@ -33,6 +33,8 @@ router.post('/draft', catchAsync(async (req, res) => sendSuccess(res,
     await service.saveDraft(req.user._id, req.body), 'Draft saved')));
 router.post('/draft/reset', catchAsync(async (_req, res) => sendSuccess(res,
     await service.resetDraft(), 'Draft reset')));
+router.post('/reset-default', publishLimit, catchAsync(async (_req, res) => sendSuccess(res,
+    await service.resetToDefault(), 'Default appearance restored')));
 router.post('/publish', publishLimit, catchAsync(async (req, res) => sendSuccess(res,
     await service.publish(req.user._id, req.body), 'Theme published')));
 router.post('/restore', publishLimit, catchAsync(async (req, res) => sendSuccess(res,

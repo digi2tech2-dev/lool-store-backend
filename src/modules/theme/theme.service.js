@@ -83,6 +83,13 @@ async function resetDraft() {
     return { draft: null };
 }
 
+async function resetToDefault() {
+    const record = await ThemeSettings.findOneAndUpdate({ scopeKey: SCOPE_KEY },
+        { $set: { published: null, draft: null, lastSuccessfulPublishAt: new Date() }, $inc: { version: 1, writeLock: 1 }, $setOnInsert: { scopeKey: SCOPE_KEY } },
+        { upsert: true, new: true, runValidators: true });
+    return { published: null, version: record.version };
+}
+
 async function publish(actorId, value, operation = 'PUBLISH') {
     const theme = validateTheme(value);
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -138,5 +145,5 @@ function presets() {
     return [...new Set([...FREE_PRESETS, ...PRO_PRESETS])].map((id) => ({ id, tier: 'FREE', configuration: preset(id) }));
 }
 
-module.exports = { settings, published, getStatus, saveDraft, resetDraft, publish, restore, restoreToDraft, history, presets,
+module.exports = { settings, published, getStatus, saveDraft, resetDraft, resetToDefault, publish, restore, restoreToDraft, history, presets,
     validateTheme, eligibility, currentSubscription, addCalendarMonthsUTC, plan, plans, allowed, SCOPE_KEY };

@@ -50,7 +50,7 @@ const palettes = {
 const colorKeys = ['primary','secondary','accent','background','surface','text','mutedText','border'];
 const allowed = {
     typography: { arabicFont: [...FREE_FONTS_AR, ...PRO_FONTS_AR], englishFont: [...FREE_FONTS_EN, ...PRO_FONTS_EN], baseSize: [14,16,18,20], bodyWeight: [400,500,600,700,800], headingWeight: [600,700,800,900] },
-    layout: { productsPerRow: [2, 3, 4, 5, 6], categoriesPerRow: [2, 3], productsPerRowMobile: [1, 2, 3], categoriesPerRowMobile: [1, 2, 3] },
+    layout: { productsPerRow: [2, 3, 4, 5, 6], categoriesPerRow: [2, 3, 4], productsPerRowMobile: [1, 2, 3, 4], categoriesPerRowMobile: [1, 2, 3, 4] },
     buttons: { radius: [0,4,8,12,24], style: ['solid','outline'] },
     cards: { radius: [0,4,8,12,16,24], shadow: ['none','subtle','medium'] },
     navigation: { style: ['standard','compact'] },
@@ -158,10 +158,10 @@ function validateTheme(value) {
     const inputLayout = value.layout === undefined ? { productsPerRow: 4, categoriesPerRow: 3 } : value.layout;
     keysOnly(inputLayout, ['productsPerRow', 'categoriesPerRow', 'productsPerRowMobile', 'categoriesPerRowMobile'], 'layout');
     const layout = { productsPerRow: inputLayout.productsPerRow, categoriesPerRow: inputLayout.categoriesPerRow };
-    if (![2, 3, 4, 5, 6].includes(layout.productsPerRow) || ![2, 3].includes(layout.categoriesPerRow)) invalid('layout');
+    if (![2, 3, 4, 5, 6].includes(layout.productsPerRow) || ![2, 3, 4].includes(layout.categoriesPerRow)) invalid('layout');
     for (const key of ['productsPerRowMobile', 'categoriesPerRowMobile']) {
         if (inputLayout[key] !== undefined) {
-            if (![1, 2, 3].includes(inputLayout[key])) invalid(`layout.${key}`);
+            if (![1, 2, 3, 4].includes(inputLayout[key])) invalid(`layout.${key}`);
             layout[key] = inputLayout[key];
         }
     }
@@ -204,7 +204,7 @@ function validateTheme(value) {
         || /[<>\u0000-\u001F\u007F]/u.test(platformName)) invalid('brand.platformName');
     if (logoPath !== null && (typeof logoPath !== 'string' || !mediaPath.test(logoPath))) invalid('brand.logoPath');
     if (!Number.isInteger(logoWidth) || logoWidth<80 || logoWidth>300) invalid('brand.logoWidth');
-    if (!Array.isArray(slides) || slides.length !== 4 || slides.some((slide) => slide !== null
+    if (!Array.isArray(slides) || ![4, 5].includes(slides.length) || slides.some((slide) => slide !== null
         && (typeof slide !== 'string' || !mediaPath.test(slide)))) invalid('brand.slides');
     if (targetBannerPath !== null && (typeof targetBannerPath !== 'string' || !mediaPath.test(targetBannerPath))) invalid('brand.targetBannerPath');
     if (typeof marqueeTextArabic !== 'string' || marqueeTextArabic !== marqueeTextArabic.trim()
@@ -212,7 +212,7 @@ function validateTheme(value) {
         || !/[\u0600-\u06FF]/u.test(marqueeTextArabic)
         || /[<>\u0000-\u001F\u007F]/u.test(marqueeTextArabic)) invalid('brand.marqueeTextArabic');
     if (!['default', 'royal', 'glass', 'aurora', 'square', 'rounded'].includes(sidebarTemplate)) invalid('brand.sidebarTemplate');
-    return { schemaVersion: 2, modes, brand: { platformName, logoPath, logoWidth, slides: [...slides], marqueeTextArabic,
+    return { schemaVersion: 2, modes, brand: { platformName, logoPath, logoWidth, slides: [...slides, ...Array(5 - slides.length).fill(null)], marqueeTextArabic,
         targetBannerPath, sidebarTemplate, sidebarMetrics }, chrome, layout };
 }
 
@@ -225,7 +225,7 @@ function preset(id) {
     const configuration = {
         schemaVersion: 2,
         modes,
-        brand: { platformName: 'Lool Store', logoPath: null, logoWidth: 144, slides: [null,null,null,null], targetBannerPath: null },
+        brand: { platformName: 'Lool Store', logoPath: null, logoWidth: 144, slides: [null,null,null,null,null], targetBannerPath: null },
         chrome,
         layout: { productsPerRow, categoriesPerRow, productsPerRowMobile, categoriesPerRowMobile },
     };
